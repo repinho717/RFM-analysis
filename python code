@@ -1,0 +1,64 @@
+#importing packages
+import pandas as pd # for dataframes
+import matplotlib.pyplot as plt # for plotting graphs
+import seaborn as sns # for plotting graphs
+import datetime as dt
+import pytz as pz #for timezones
+
+data = pd.read_excel
+
+data.market.unique()
+
+data.isnull().sum(axis=0)
+
+def unique_counts(data):
+   for i in data.columns:
+       count = data[i].nunique()
+       print(i, ": ", count)
+unique_counts(data)
+
+#creating time function
+NOW = dt.datetime(2020,1,1,1,1,1, tzinfo=pz.UTC)
+data['created'] = pd.to_datetime(data['created'])
+
+data=data[['customer_id','created','orderid','total_price_eur','market']]
+
+rfm= data.groupby('customer_id').agg({'created': lambda date: (NOW - date.max()).days,
+                                        'orderid': lambda num: len(num),
+                                        'total_price_eur': lambda price: price.sum(),
+                                         'market': max })
+                                         
+#changing coulmn names
+rfm.columns=['recency','frequency','monetary','market']
+
+#creating quantiles
+quantiles = rfm.quantile(q=[0.25,0.5,0.75])
+quantiles = quantiles.to_dict()
+
+def RScore(x,p,d):
+    if x <= d[p][0.25]:
+        return 1
+    elif x <= d[p][0.50]:
+        return 2
+    elif x <= d[p][0.75]: 
+        return 3
+    else:
+        return 4
+    
+def FMScore(x,p,d):
+    if x <= d[p][0.25]:
+        return 4
+    elif x <= d[p][0.50]:
+        return 3
+    elif x <= d[p][0.75]: 
+        return 2
+    else:
+        return 1
+        
+segmented_rfm=rfm
+
+segmented_rfm['r_quartile'] = segmented_rfm['recency'].apply(RScore, args=('recency',quantiles,))
+segmented_rfm['f_quartile'] = segmented_rfm['frequency'].apply(FMScore, args=('frequency',quantiles,))
+segmented_rfm['m_quartile'] = segmented_rfm['monetary'].apply(FMScore, args=('monetary',quantiles,))
+
+rfm['RFM_Score'] = rfm.r_quartile.astype(str)+ rfm.f_quartile.astype(str) + rfm.m_quartile.astype(str)
